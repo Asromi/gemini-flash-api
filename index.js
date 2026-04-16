@@ -2,24 +2,23 @@ import {GoogleGenAI} from '@google/genai';
 import 'dotenv/config';
 import express from 'express';
 import multer from 'multer';
+import fs from 'fs/promises';
 
 const app = express();
-const port = 3000;
+const port = 3003;
 const upload = multer();
+const model = 'gemini-3-flash-preview';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
   console.error('Missing GEMINI_API_KEY in environment');
   process.exit(1);
 }
-
 const ai = new GoogleGenAI({apiKey: GEMINI_API_KEY});
-const model = 'gemini-3-flash-preview';
 
 app.use(express.json());
 
-
 app.get('/', (req, res) => {
-  res.send('Hello Asromi');
+  res.send('Hello...');
 });
 
 app.post('/generate-text', upload.none(), async (req, res) => {
@@ -39,7 +38,7 @@ app.post('/generate-text', upload.none(), async (req, res) => {
   }
 });     
 
-app.post('/generate-image', upload.single('image'), async (req, res) => {
+app.post('/generate-from-image', upload.single('image'), async (req, res) => {
   const {contents} = req.body;
   const base64Image = req.file ? req.file.buffer.toString('base64') : null; 
   if (!contents) {
@@ -59,6 +58,40 @@ app.post('/generate-image', upload.single('image'), async (req, res) => {
     res.status(500).json({error: 'An error occurred while generating content.'});
   }
 }); 
+
+app.post('/generate-from-audio', upload.single('audio'), async (req, res) => {
+    try {
+        const { prompt } = req.body;
+        const audioBase64 = req.file.buffer.toString('base64');
+        const resp = await ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [
+                { text: prompt || "Transkrip audio berikut:" },
+                { inlineData: { mimeType: req.file.mimetype, data: audioBase64 } }
+            ]
+        });
+        res.json({ result: extractText(resp) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/generate-from-document', upload.single('document'), async (req, res) => {
+    try {
+        const { prompt } = req.body;
+        const docBase64 = req.file.buffer.toString('base64');
+        const resp = await ai.models.generateContent({
+            model: GEMINI_MODEL,
+            contents: [
+                { text: prompt },
+                { inlineData: { mimeType: req.file.mimetype, data: docBase64 } }
+            ]
+        });
+        res.json({ result: extractText(resp) });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
